@@ -226,7 +226,7 @@ const deleteLibrary = async (req, res) => {
 		const checkAdmin = checkRole(req.userId.Id, "QUANLYBIM", 3);
 		if (checkAdmin == true) {
 			if (req.query.id) return res.status(400).json({ message: "Cannot process this request" });
-			const library = await ThuVienDuAns.destroy(req.query.id);
+			const library = await ThuVienDuAns.update({ IsXoa: true }, { where: { Id: req.query.id } });
 			if (!library) return res.status(404).json({ message: "Library not found" });
 			return res.status(204);
 		}
@@ -267,10 +267,10 @@ const shareDirectory = async (req, res) => {
 		if (file) {
 			await ThuMuc_File_Share.create({
 				IdItem: req.body.idItem,
-				TenFile: req.body.TenFile,
+				TenFile: req.body.tenFile,
 				IdNguoiNhan: req.body.idNguoiNhan,
 				Quyen: req.body.quyen,
-				IdChuSoHuu: req.body.idChuSoHuu,
+				IdChuSoHuu: req.user.Id,
 				CreatedBy: req.user.Id,
 				Created: Date.now(),
 				ModifiedBy: req.user.Id,
@@ -336,6 +336,8 @@ const shareDirectory = async (req, res) => {
 
 const getPersonalFolder = async (req, res) => {
 	try {
+		const user = await AspNetUsers.findByPk(req.user.Id);
+		if (user) return res.status(404).json({ message: "User not found" });
 		const myFolder = await ThuMucHoSoDuAns.findAll({ where: { idNguoiSoHuu: req.user.Id, isXoa: false } });
 		const myFile = await FileDinhKems.findAll({ where: { CreatedBy: req.user.Id, isXoa: false } });
 		const mySharedFile = await ThuMuc_File_Share.findAll({
@@ -367,36 +369,29 @@ const moveFolder = async (req, res) => {
 		if (!folder) return res.status(404).json({ message: "Folder not found" });
 		switch (req.query.action) {
 			case "left":
-				break;
+				return res.status(200).json({ message: "Folder move left successfully" });
 			case "right":
-				break;
+				return res.status(200).json({ message: "Folder move right successfully" });
 			case "up":
-				if (folder.CapDoFolder <= 1)
-					return res.status(422).json({ message: "Can not move folder out of project" });
-				const moveUpParentFolder = await ThuMucHoSoDuAns.findByPk(folder.idFolderParent, {
-					attributes: ["idFolderParent"],
-				});
-				await folder.update({
-					CapDoFolder: folder.CapDoFolder - 1,
-					idFolderParent: moveUpParentFolder,
-					Modified: Date.now(),
-					ModifiedBy: req.user.Id,
-				});
-				return res.status(200).json({ message: "Folder move successfully" });
+				return res.status(200).json({ message: "Folder move up successfully" });
 			case "down":
-				const moveDownParentFolder = await ThuMucHoSoDuAns.findByPk(folder.idFolderParent, {
-					attributes: ["idFolderParent"],
-				});
-				await folder.update({
-					CapDoFolder: folder.CapDoFolder + 1,
-					idFolderParent: moveDownParentFolder,
-					Modified: Date.now(),
-					ModifiedBy: req.user.Id,
-				});
 				return res.status(200).json({ message: "Folder move successfully" });
 			default:
 				return res.status(418).json("The action is not be able to be performed");
 		}
+	} catch (e) {
+		return res.status(500).json({ message: e });
+	}
+};
+
+//Mobile API
+const getFile = async (req, res) => {
+	try {
+		const tasksQuery = `
+		SELECT *
+		FROM "FileDinhKems" f
+		INNER JOIN "
+		`;
 	} catch (e) {
 		return res.status(500).json({ message: e });
 	}
