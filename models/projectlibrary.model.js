@@ -1,15 +1,14 @@
 "use strict";
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
-	class ThuVienDuAns extends Model {}
-	ThuVienDuAns.init(
+	class ThuVienThuMucMaus extends Model {}
+	ThuVienThuMucMaus.init(
 		{
 			Id: {
 				allowNull: false,
 				primaryKey: true,
 				unique: true,
-				type: DataTypes.INTEGER,
-				autoIncrement: true,
+				type: DataTypes.UUID,
 			},
 			MaThuVien: DataTypes.STRING,
 			TenThuVien: DataTypes.STRING,
@@ -25,10 +24,10 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		{
 			sequelize,
-			modelName: "ThuVienDuAns",
+			modelName: "ThuVienThuMucMaus",
 			timestamps: false,
 			freezeTableName: true,
 		}
 	);
-	return ThuVienDuAns;
+	return ThuVienThuMucMaus;
 };

@@ -30,6 +30,7 @@ if (config.use_env_variable) {
 sequelize
 	.authenticate()
 	.then(() => {
+		console.log(`Db connect to \x1b[33m${config.database}\x1b[0m at host \x1b[35m${config.host}`);
 		console.log("\x1b[37;42mConnection has been established successfully.\x1b[0m");
 	})
 	.catch((e) => {

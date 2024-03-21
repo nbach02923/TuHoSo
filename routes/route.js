@@ -8,12 +8,19 @@ const {
 	getLibrary,
 	createLibrary,
 	getPersonalFolder,
-	updateLibrary,
 	deleteLibrary,
 	shareDirectory,
+	getFilterLibrary,
+	createAndUpdateFolder,
+	deleteFolder,
+	moveFolder,
 } = require("../controllers/file.controller");
 
 const router = Router();
+
+router.get("/", function (req, res) {
+	res.send("Hello World");
+});
 
 // router.get("/user", verifyToken, getUser);
 
@@ -23,11 +30,14 @@ const router = Router();
 
 // router.get("/employee", verifyToken, getEmployee);
 
-router.get("/library", verifyToken, getLibrary);
-router.post("/library", verifyToken, createLibrary);
-router.get("/personalItem", verifyToken, getPersonalFolder);
-router.post("/sharedFolder", verifyToken, shareDirectory);
-router.put("/library", verifyToken, updateLibrary);
-router.delete("/library", verifyToken, deleteLibrary);
+router.route("/GetThuVien").get(verifyToken, getLibrary);
+router.route("/SetThuVien").post(verifyToken, createLibrary);
+router.route("/SetFolderMau").post(verifyToken, createAndUpdateFolder);
+router.route("/GetShareFolder").post(verifyToken, getPersonalFolder);
+router.route("/ShareFolder").post(verifyToken, shareDirectory);
+router.route("/DeleteThuVien").get(verifyToken, deleteLibrary);
+router.route("/DeleteFolder").get(verifyToken, deleteFolder);
+router.route("/GetListThuVienFilter").post(verifyToken, getFilterLibrary);
+router.route("/MoveFolder").post(verifyToken, moveFolder);
 
 module.exports = router;

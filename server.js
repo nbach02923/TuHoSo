@@ -11,15 +11,32 @@ const app = express();
 
 app.use(helmet());
 
-app.use(cors());
+app.use(
+	cors({
+		origin: "*",
+	})
+);
+
+app.options("*", (req, res) => {
+	res.header("Access-Control-Allow-Origin", "*");
+	res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+	res.header("Access-Control-Allow-Headers", "Content-Type");
+	res.sendStatus(200);
+});
+
+app.use((req, res, next) => {
+	res.header("ngrok-skip-browser-warning", "true");
+	res.header("Access-Control-Allow-Origin", "*");
+	res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
+	res.header("Access-Control-Allow-Headers", "Content-Type");
+	next();
+});
 
 app.use(bodyParser.json());
 
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.use(cookieParser());
-
-app.use("/api", router);
+app.use(router);
 
 const port = process.env.PORT || 3132;
 const host = process.env.HOST || "localhost";

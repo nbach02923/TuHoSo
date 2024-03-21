@@ -9,22 +9,17 @@ module.exports = {
 		 * Example:
 		 * await queryInterface.createTable('users', { id: Sequelize.INTEGER });
 		 */
-		await queryInterface.createTable("ThuMuc_Share", {
-			Id: {
-				allowNull: false,
-				primaryKey: true,
-				unique: true,
-				type: Sequelize.UUID,
-			},
-			IdItem: Sequelize.UUID,
+		await queryInterface.createTable("ThuMucHoSoMaus", {
+			Id: Sequelize.UUID,
 			TenFolder: Sequelize.STRING,
-			IdNguoiNhan: Sequelize.STRING,
-			Quyen: Sequelize.STRING,
-			IdChuSoHuu: Sequelize.STRING,
+			CapDoFolder: Sequelize.INTEGER,
+			idFolderParent: Sequelize.UUID,
 			Created: Sequelize.DATE,
 			CreatedBy: Sequelize.STRING,
 			Modified: Sequelize.DATE,
 			ModifiedBy: Sequelize.STRING,
+			idFolderMau: Sequelize.INTEGER,
+			idThuVien: Sequelize.UUID,
 		});
 	},
 
@@ -35,6 +30,6 @@ module.exports = {
 		 * Example:
 		 * await queryInterface.dropTable('users');
 		 */
-		await queryInterface.dropTable("ThuMuc_Share")
+		await queryInterface.dropTable("ThuMucHoSoMaus");
 	},
 };

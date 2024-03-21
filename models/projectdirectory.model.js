@@ -17,6 +17,7 @@ module.exports = (sequelize, DataTypes) => {
 			idDuAn: DataTypes.INTEGER,
 			idFolderRoot: DataTypes.INTEGER,
 			idNguoiSoHuu: DataTypes.STRING,
+			positionInTree: DataTypes.INTEGER,
 			isXoa: DataTypes.BOOLEAN,
 			GhiChu: DataTypes.TEXT,
 			CreatedBy: DataTypes.STRING,
