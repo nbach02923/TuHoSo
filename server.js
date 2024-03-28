@@ -6,31 +6,20 @@ const bodyParser = require("body-parser");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 dotenv.config({ path: `.env.${process.env.NODE_ENV}` });
-console.log(process.env.NODE_ENV);
 const app = express();
 
 app.use(helmet());
 
-app.use(
-	cors({
-		origin: "*",
-	})
-);
+const corsOptions = {
+	origin: "*",
+	methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+	optionsSuccessStatus: 200,
+	allowedHeaders: "*",
+	credentials: true,
+	maxAge: 86400,
+};
 
-app.options("*", (req, res) => {
-	res.header("Access-Control-Allow-Origin", "*");
-	res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-	res.header("Access-Control-Allow-Headers", "Content-Type");
-	res.sendStatus(200);
-});
-
-app.use((req, res, next) => {
-	res.header("ngrok-skip-browser-warning", "true");
-	res.header("Access-Control-Allow-Origin", "*");
-	res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-	res.header("Access-Control-Allow-Headers", "Content-Type");
-	next();
-});
+app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 

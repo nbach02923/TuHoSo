@@ -5,8 +5,9 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start:dev": "cross-env NODE_ENV=\"development\" nodemon server.js",
-    "start:prod": "cross-env NODE_ENV=\"production\" pm2 start server.js",
+    "start:dev": "cross-env NODE_ENV=\"development\" pm2 start server.js",
+    "start:test": "cross-env NODE_ENV=\"test\" nodemon server.js",
+    "start:prod": "cross-env NODE_ENV=\"production\" nodemon server.js",
     "stop": "pm2 stop server.js",
     "restart": "pm2 restart server.js",
     "reload": "pm2 reload server.js",

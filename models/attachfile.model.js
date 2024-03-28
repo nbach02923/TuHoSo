@@ -49,6 +49,7 @@ module.exports = (sequelize, DataTypes) => {
 			LinkHTTP: DataTypes.STRING,
 			IdNoiGuiNhan: DataTypes.INTEGER,
 			TableId: DataTypes.STRING,
+			idFolderAll: DataTypes.STRING,
 		},
 		{
 			sequelize,

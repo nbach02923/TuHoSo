@@ -1,5 +1,3 @@
-const uploadFileMiddleware = require("../middlewares/file.middleware");
-const verifyToken = require("../middlewares/auth.middleware");
 const {
 	AspNetUsers,
 	FileDinhKems,
@@ -9,153 +7,18 @@ const {
 	ThuMuc_Share,
 	ThuVienThuMucMaus,
 	ThuMucHoSoKhacs,
+	Link_File_FolderShare_History,
+	Link_File_FolderShare_HistoryDetail,
+	Link_FolderTuHoSo_User,
+	Link_FolderTuHoSo_Group,
+	Link_FolderTuHoSo_PhongBan,
+	Link_ThuVien_DuAn,
 	sequelize,
 } = require("../models");
-const path = require("path");
 const crypto = require("crypto");
-const { QueryTypes, Op } = require("sequelize");
+const { QueryTypes, Op, literal } = require("sequelize");
 const checkRole = require("./role.controller");
 require("dotenv").config();
-
-const getItem = async (req, res) => {
-	try {
-		const folder = await ThuMucHoSoDuAns.findAll({ where: { isXoa: false } });
-		const file = await FileDinhKems.findAll({ where: { isXoa: false } });
-		return res.json({ folder, file });
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-// API below is not gonna use right now
-const upload = async (req, res) => {
-	try {
-		await uploadFileMiddleware(req, res);
-		if (req.file === undefined) {
-			return res.status(400).json({ message: "Please provide a file" });
-		}
-		const linuxPath = path.posix.join(...__dirname.split(path.sep));
-		const filePath = `${linuxPath}/${path.posix.join(...req.file.path.split(path.sep))}`;
-		const folderPath = `${linuxPath}${req.file.destination.split(".")[1]}`;
-		await AttachFile.create({
-			Id: parseInt(`2${Math.floor(100000 + Math.random() * 900000)}`),
-			FileName: req.file.originalname,
-			FileNameGUI: req.file.filename,
-			Folder: folderPath,
-			Path: filePath,
-			Link: `${process.env.API_LINK}?filename=${Buffer.from(req.file.filename).toString(
-				"base64"
-			)}&path=${Buffer.from(filePath).toString("base64")}`,
-			CreatedBy: req.user.Id,
-			OwnerId: req.user.Id,
-		});
-		return res.status(200).json({ message: "File uploaded successfully" });
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-// const createFolder = async (req, res) => {
-// 	try {
-// 		const folder = await ProjectFileDirectory.findOne({
-// 			where: { FolderName: req.body.folderName, IsDeleted: false },
-// 		});
-// 		if (folder) {
-// 			return res.status(409).json({ message: "Folder already existed" });
-// 		}
-// 		await folder.create({
-// 			FolderName: req.body.folderName,
-// 			FolderLevel: req.body.folderLevel,
-// 			ParentFolderId: req.body.parentFolderId,
-// 			ProjectId: req.body.projectId,
-// 			RootFolderId: req.body.rootFolderId,
-// 			OwnerId: req.user.Id,
-// 			CreatedBy: req.user.Id,
-// 		});
-// 		return res.status(200).json({ message: "Folder created successfully" });
-// 	} catch (e) {
-// 		return res.status(500).json(e);
-// 	}
-// };
-
-const deleteItem = async (req, res) => {
-	try {
-		const { Id } = req.query;
-		const file = await AttachFile.update({ IsDeleted: true }, { where: { Id } });
-		const folder = await ProjectFileDirectory.update({ IsDeleted: true }, { where: { Id } });
-		if (!file && !folder) return res.status(404).json({ message: "File or folder not found." });
-		if (folder) {
-			await AttachFile.update({ IsDeleted: true }, { where: { FolderId: Id } });
-		}
-		return res.status(204);
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-const recoverFileFolder = async (req, res) => {
-	try {
-		const { Id } = req.query;
-		const date = new Date(Date.now() - 30 * 24 * 1000 * 60 * 60).toDateString();
-		const file = await AttachFile.update({ IsDeleted: false }, { where: { Id, updatedAt: { [Op.lte]: date } } });
-		const folder = await ProjectFileDirectory.update(
-			{ IsDeleted: false },
-			{ where: { Id, updatedAt: { [Op.lte]: date } } }
-		);
-		if (!file && !folder) return res.status(404).json({ message: "File or folder not found." });
-		if (folder) {
-			await AttachFile.update({ IsDeleted: false }, { where: { FolderId: Id } });
-		}
-		return res.status(204);
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-const getBin = async (req, res) => {
-	try {
-		const date = new Date(Date.now() - 30 * 24 * 1000 * 60 * 60).toISOString().split("T")[0];
-		const query = `
-		SELECT *
-		FROM "ProjectFileDirectory" folder
-		LEFT JOIN "AttachFile" file 
-			ON folder.Id = file."FolderId" 
-			AND file."IsDeleted" = true 
-		WHERE folder."IsDeleted" = true 
-			AND folder."IsPermanentDeleted" = false 
-			AND folder."updatedAt" <= ${date}
-		`;
-		const fileFolder = await sequelize.query(query, { nest: true, type: QueryTypes.SELECT });
-		return res.json(fileFolder);
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-const permanentDeleteFileFolder = async (req, res) => {
-	const { fileName, folderName } = req.query;
-	if (!fileName && !folderName) return res.status(400).json({ message: "Please select file or folder to delete." });
-	try {
-		// Fake permanent delete, still keep in the storage and database
-		const itemDelete = await (fileName ? AttachFile : ProjectFileDirectory).update(
-			{ IsPermanentDeleted: true },
-			{ where: { [fileName ? "FileName" : "FolderName"]: fileName || folderName, isDeleted: true } }
-		);
-		return itemDelete ? res.status(204) : res.status(404).json({ message: "File or folder is not found" });
-		// Delete file and folder from database and file is delete from storage
-		// const itemDelete = await (fileName ? AttachFile : ProjectFileDirectory).destroy({
-		// 	where: { [fileName ? "FileName" : "FolderName"]: fileName || folderName, isDeleted: true },
-		// });
-		// fs.unlink(itemDelete.Path, (e) => {
-		// 	if (e) return res.status(500).json({ message: e.message });
-		// });
-		// return itemDelete ? res.status(204) : res.status(404).json({ message: "File or folder is not found" });
-	} catch (e) {
-		return res.status(500).json(e);
-	}
-};
-
-// API for project library contain project folder template
 
 const buildFolderStructure = (folders) => {
 	const folderMap = new Map();
@@ -168,7 +31,7 @@ const buildFolderStructure = (folders) => {
 	}
 	for (const folder of folderMap.values()) {
 		const parentId = folder.idFolderParent;
-		if (parentId === folder.Id) {
+		if (parentId === "0") {
 			rootFolders.push(folder);
 		} else {
 			const parentFolder = folderMap.get(parentId);
@@ -186,11 +49,20 @@ const buildFolderStructure = (folders) => {
 
 const getLibrary = async (req, res) => {
 	try {
+		if (!req.query.Id) {
+			return res
+				.status(200)
+				.json({ Detail: "Please provide library you want to find", Error: 6, sError: "LoiCuPhap" });
+		}
 		const library = await ThuVienThuMucMaus.findByPk(req.query.Id);
 		if (!library) return res.status(200).json({ Detail: "Không tồn tại thư viện", Error: 2 });
 		const folder = await ThuMucHoSoDuAnMaus.findAll({
 			where: { idThuVien: req.query.Id },
-			order: [["CapDoFolder", "ASC"]],
+			order: [
+				["CapDoFolder", "ASC"],
+				["Position", "ASC"],
+				["TenThuVien", "ASC"],
+			],
 		});
 		const libraryData = library.toJSON();
 		libraryData.folder = buildFolderStructure(folder);
@@ -203,31 +75,48 @@ const getLibrary = async (req, res) => {
 const getFilterLibrary = async (req, res) => {
 	try {
 		const keyword = req.body.Keyword;
-		let result;
+		let libraries;
 		if (keyword !== "") {
-			result = await sequelize.query(
-				`
-			SELECT *
-			FROM "ThuVienThuMucMaus" l
-			WHERE l."TenThuVien" = :keyword OR l."MaThuVien" = :keyword
-			ORDER BY l."Created" ASC
-			`,
-				{
-					replacements: {
-						keyword: keyword,
-					},
-				}
-			);
+			libraries = await ThuVienThuMucMaus.findAll({
+				where: {
+					[Op.or]: [
+						{
+							TenThuVien: {
+								[Op.like]: `%${keyword}%`,
+							},
+							MaThuVien: {
+								[Op.like]: `%${keyword}%`,
+							},
+						},
+					],
+				},
+				order: [
+					["Created", "ASC"],
+					["TenThuVien", "ASC"],
+				],
+			});
+		} else {
+			libraries = await ThuVienThuMucMaus.findAll({ order: [["Created", "ASC"]] });
 		}
-		result = await sequelize.query(
-			`
-			SELECT *
-			FROM "ThuVienThuMucMaus" l
-			ORDER BY "Created" ASC
-			`,
-			{ nest: true, type: QueryTypes.SELECT }
-		);
-		return res.json(result);
+		const libraryIds = libraries.map((library) => library.Id);
+		const duAnLinks = await Link_ThuVien_DuAn.findAll({
+			where: {
+				idThuVien: libraryIds,
+			},
+			attributes: ["idThuVien", "idDuAn", "LoaiThuMuc"],
+		});
+		const result = libraries.map((library) => {
+			const listIdDuAn = duAnLinks.filter((link) => link.idThuVien === library.Id).map((link) => link.idDuAn);
+			const listLoaiThuMuc = duAnLinks
+				.filter((link) => link.idThuVien === library.Id)
+				.map((link) => link.LoaiThuMuc);
+			return {
+				...library.toJSON(),
+				listIdDuAn,
+				listLoaiThuMuc,
+			};
+		});
+		return res.json({ Detail: "Get library successfully", Error: 7, Value: result });
 	} catch (e) {
 		return res.status(200).json({ Message: e.message, StatusCode: 2, Detail: "Lỗi Server", sError: "LoiServer" });
 	}
@@ -237,9 +126,10 @@ const createLibrary = async (req, res) => {
 	try {
 		// const checkAdmin = checkRole(req.user.Id, "QUANLYBIM", 3);
 		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allowed" });
-		if (req.body.Id !== "") {
-			const library = await ThuVienThuMucMaus.findByPk(req.body.Id, { Where: { isXoa: false } });
-			if (!library) return res.status(200).json({ Error: 9 });
+		let library;
+		if (req.body.Id && req.body.Id !== "") {
+			library = await ThuVienThuMucMaus.findByPk(req.body.Id, { where: { isXoa: false } });
+			if (!library) return res.status(200).json({ Error: 9, Detail: "Không tồn tại thư viện" });
 			await library.update({
 				MaThuVien: req.body.MaThuVien,
 				TenThuVien: req.body.TenThuVien,
@@ -247,28 +137,26 @@ const createLibrary = async (req, res) => {
 				Modified: Date.now(),
 				ModifiedBy: req.user.Id,
 			});
-			return res
-				.status(200)
-				.json({ Error: 4, sError: "CapNhatThanhCong", Detail: "Cập nhật thành công", Value: library.Id });
+		} else {
+			const existedLibrary = await ThuVienThuMucMaus.findOne({
+				where: { MaThuVien: req.body.MaThuVien, isXoa: false },
+			});
+			if (existedLibrary) return res.status(200).json({ StatusCode: 1, Error: 1, Detail: "Trùng mã thư viện" });
+			const Id = crypto.randomUUID();
+			library = await ThuVienThuMucMaus.create({
+				Id: Id,
+				MaThuVien: req.body.MaThuVien,
+				TenThuVien: req.body.TenThuVien,
+				GhiChu: req.body.GhiChu,
+				Created: Date.now(),
+				CreatedBy: req.user.Id,
+				Modified: Date.now(),
+				ModifiedBy: req.user.Id,
+			});
 		}
-		const existedLibrary = await ThuVienThuMucMaus.findOne({
-			where: { MaThuVien: req.body.MaThuVien, isXoa: false },
-		});
-		if (existedLibrary) return res.status(200).json({ StatusCode: 1, Error: 1, Detail: "Trùng mã thư viện" });
-		const Id = crypto.randomUUID();
-		const library = await ThuVienThuMucMaus.create({
-			Id: Id,
-			MaThuVien: req.body.MaThuVien,
-			TenThuVien: req.body.TenThuVien,
-			GhiChu: req.body.GhiChu,
-			Created: Date.now(),
-			CreatedBy: req.user.Id,
-			Modified: Date.now(),
-			ModifiedBy: req.user.Id,
-		});
 		return res
 			.status(200)
-			.json({ Error: 4, sError: "CapNhatThanhCong", Detail: "Cập nhật thành công", Value: library.Id });
+			.json({ Error: 4, sError: "CapNhatThanhCong", Detail: "Cập nhật thành công", Value: library });
 	} catch (e) {
 		return res.status(200).json({ Error: 6 });
 	}
@@ -276,63 +164,153 @@ const createLibrary = async (req, res) => {
 
 const deleteLibrary = async (req, res) => {
 	try {
-		const checkAdmin = checkRole(req.userId.Id, "QUANLYBIM", 3);
-		if (checkAdmin == true) {
-			if (req.query.Id) return res.status(200).json({ message: "Cannot process this request" });
-			const library = await ThuVienThuMucMaus.update({ IsXoa: true }, { where: { Id: req.query.Id } });
-			if (!library) return res.status(200).json({ message: "Library not found" });
-			return res.status(200);
-		}
-		return res.status(403).json({ message: "Only admin allow" });
+		// const checkAdmin = checkRole(req.userId.Id, "QUANLYBIM", 3);
+		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allow" });
+		if (!req.query.Id)
+			return res.status(200).json({ Detail: "Cannot process this request", Error: 6, sError: "LoiCuPhap" });
+		const library = await ThuVienThuMucMaus.destroy({ where: { Id: req.query.Id } });
+		if (!library) return res.status(200).json({ message: "Library not found" });
+		await ThuMucHoSoDuAnMaus.destroy({ where: { idThuVien: req.query.Id } });
+		return res.status(200).json({ Detail: "Library successfully deleted", Error: 4, Value: library });
 	} catch (e) {
-		return res.status(500).json(e);
+		return res.status(200).json({ Detail: e.message, Error: 9, sError: "LoiServer" });
 	}
 };
 
 const createAndUpdateFolder = async (req, res) => {
 	try {
 		const library = await ThuVienThuMucMaus.findByPk(req.body.idThuVien);
-		if (!library) return res.status(200).json({ Detail: "" });
+		if (!library) return res.status(200).json({ Detail: "Cannot find library", Error: 9, sError: "LoiCuPhap" });
 		if (req.body.Id) {
-			await ThuMucHoSoDuAnMaus.update(
-				{
+			const existingFolder = await ThuMucHoSoDuAnMaus.findByPk(req.body.Id);
+			if (!existingFolder)
+				return res.status(200).json({ Error: 9, Detail: "Folder not found", sError: "LoiCuPhap" });
+			await existingFolder.update({
+				MaFolder: req.body.MaFolder,
+				TenFolder: req.body.TenFolder,
+				Modified: Date.now(),
+				ModifiedBy: req.user.Id,
+			});
+			return res.status(200).json({ Error: 4, Detail: "Cập nhật thành công", Value: existingFolder });
+		} else {
+			const parentLevel = await ThuMucHoSoDuAnMaus.findByPk(req.body.idFolderParent, {
+				attributes: ["CapDoFolder"],
+			});
+			let folderWithSamePosition;
+			if (req.body.idFolderParent === "") {
+				folderWithSamePosition = await ThuMucHoSoDuAnMaus.findOne({
+					where: { idThuVien: req.body.idThuVien, Position: req.body.Position },
+				});
+			} else {
+				folderWithSamePosition = await ThuMucHoSoDuAnMaus.findOne({
+					where: {
+						Position: req.body.Position,
+						idFolderParent: req.body.idFolderParent,
+						idThuVien: req.body.idThuVien,
+					},
+				});
+			}
+			if (folderWithSamePosition) {
+				const foldersToUpdate = await ThuMucHoSoDuAnMaus.findAll({
+					where: {
+						idThuVien: req.body.idThuVien,
+						idFolderParent: req.body.idFolderParent,
+						Position: {
+							[Op.gte]: req.body.Position,
+						},
+					},
+					order: [["Position", "ASC"]],
+				});
+				for (const folder of foldersToUpdate) {
+					await folder.update({
+						Position: folder.Position + 1,
+					});
+				}
+			} else {
+				const folderId = crypto.randomUUID();
+				const folder = await ThuMucHoSoDuAnMaus.create({
+					Id: folderId,
 					MaFolder: req.body.MaFolder,
 					TenFolder: req.body.TenFolder,
+					CapDoFolder: parentLevel ? parentLevel.CapDoFolder + 1 : 1,
+					idFolderParent: req.body.idFolderParent === "" ? "0" : req.body.idFolderParent,
+					Position: req.body.Position,
+					Created: Date.now(),
+					CreatedBy: req.user.Id,
 					Modified: Date.now(),
 					ModifiedBy: req.user.Id,
-				},
-				{ where: { Id: req.body.Id } }
-			);
+					idFolderMau: 0,
+					idThuVien: req.body.idThuVien,
+				});
+				return res.status(200).json({ Error: 4, Detail: "Cập nhật thành công", Value: folder });
+			}
 		}
-		const parentLevel = await ThuMucHoSoDuAnMaus.findByPk(req.body.idFolderParent, { attributes: ["CapDoFolder"] });
-		const folderId = crypto.randomUUID();
-		const folder = await ThuMucHoSoDuAnMaus.create({
-			Id: folderId,
-			MaFolder: req.body.MaFolder,
-			TenFolder: req.body.TenFolder,
-			CapDoFolder: parentLevel ? parentLevel.CapDoFolder + 1 : 1,
-			idFolderParent: req.body.idFolderParent === "" ? folderId : req.body.idFolderParent,
-			Position: req.body.Position,
-			Created: Date.now(),
-			CreatedBy: req.user.Id,
-			Modified: Date.now(),
-			ModifiedBy: req.user.Id,
-			idFolderMau: 0,
-			idThuVien: req.body.idThuVien,
-		});
-		return res.status(201).json({ Error: 4, Detail: "Cập nhật thành công", Value: folder });
 	} catch (e) {
 		return res.status(200).json({ Detail: e.message, Error: 9, Value: null, sError: "LoiServer" });
 	}
 };
 
+const deleteChildFolder = async (childId) => {
+	const childrenOfChild = await ThuMucHoSoDuAnMaus.findAll({ where: { idFolderParent: childId } });
+	for (const child of childrenOfChild) {
+		await deleteChildFolder(child.Id);
+	}
+	await ThuMucHoSoDuAnMaus.destroy({ where: { Id: childId } });
+};
+
 const deleteFolder = async (req, res) => {
 	try {
-		const library = await ThuMucHoSoDuAnMaus.destroy(req.query.Id);
-		if (!library) return res.status(200).json({ Error: 9 });
-		return res.status(200).json({ Errro: 4, Detail: "Xóa thành công" });
+		// const checkAdmin = checkRole(req.user.Id, "QUANLYBIM", 3);
+		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allowed" });
+		const folder = await ThuMucHoSoDuAnMaus.findByPk(req.query.Id);
+		if (!folder) return res.status(200).json({ Detail: "Folder not found", Error: 6, sError: "LoiCuPhap" });
+		const childFolder = await ThuMucHoSoDuAnMaus.findAll({
+			where: { CapDoFolder: { [Op.gt]: folder.CapDoFolder }, idFolderParent: folder.Id },
+		});
+		for (const child of childFolder) {
+			await deleteChildFolder(child.Id);
+		}
+		let sameCapDoFolder;
+		if (folder.CapDoFolder === 1) {
+			sameCapDoFolder = await ThuMucHoSoDuAnMaus.findAll({
+				where: {
+					idThuVien: folder.idThuVien,
+					CapDoFolder: folder.CapDoFolder,
+					Position: { [Op.gt]: folder.Position },
+				},
+				attributes: ["Id"],
+				raw: true,
+			});
+		} else {
+			sameCapDoFolder = await ThuMucHoSoDuAnMaus.findAll({
+				where: {
+					CapDoFolder: folder.CapDoFolder,
+					idFolderParent: folder.idFolderParent,
+					Position: { [Op.gt]: folder.Position },
+				},
+				attributes: ["Id"],
+				raw: true,
+			});
+		}
+		if (sameCapDoFolder.length > 0) {
+			for (const folder of sameCapDoFolder) {
+				await folder.update({ Position: folder.Position - 1 });
+			}
+		}
+		const deletedFolder = await ThuMucHoSoDuAnMaus.destroy({
+			where: { Id: req.query.Id },
+		});
+		return res.status(200).json({
+			Error: 4,
+			Detail: "Xóa thành công",
+			Value: deletedFolder,
+		});
 	} catch (e) {
-		return res.status(200).json({ Error: 9, Detail: e.message });
+		return res.status(200).json({
+			Error: 9,
+			Detail: e.message,
+			sError: "LoiServer",
+		});
 	}
 };
 
@@ -340,124 +318,267 @@ const shareDirectory = async (req, res) => {
 	try {
 		// const checkAdmin = checkRole(req.user.Id, "QUANLYBIM", 3);
 		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allowed" });
-		switch (req.body.Type) {
-			case "user":
-				break;
-
-			default:
-				break;
+		let userfolderShare, groupFolderShare, departmentFolderShare;
+		for (const shareToItem of req.body.ShareTo) {
+			switch (req.body.Type) {
+				case "user":
+					const user = await AspNetUsers.findByPk(shareToItem.Id);
+					if (!user) {
+						console.error(`User with ID ${shareToItem.Id} not found`);
+					} else {
+						userfolderShare = await Link_FolderTuHoSo_User.create({
+							Id: crypto.randomUUID(),
+							idFolderTuHoSo: req.body.Id,
+							idUser: shareToItem.Id,
+							MaQuyen: shareToItem.MaQuyen,
+							CreatedBy: req.user.Id,
+							Created: new Date(),
+							ModifiedBy: req.user.Id,
+							Modified: new Date(),
+						});
+					}
+					break;
+				case "group":
+					const group = await GroupShareTuHoSoes.findByPk(shareToItem.Id);
+					if (!group) {
+						console.error(`Group with ID ${shareToItem.Id} not found`);
+					} else {
+						groupFolderShare = await Link_FolderTuHoSo_Group.create({
+							Id: crypto.randomUUID(),
+							idFolderTuHoSo: req.body.Id,
+							idGroupShareTuHoSo: shareToItem.Id,
+							MaQuyen: shareToItem.MaQuyen,
+							CreatedBy: req.user.Id,
+							Created: new Date(),
+							ModifiedBy: req.user.Id,
+							Modified: new Date(),
+						});
+					}
+					break;
+				case "department":
+					const department = await BoPhans.findByPk(shareToItem.Id);
+					if (!department) {
+						console.error(`Department with ID ${shareToItem.Id} not found`);
+					} else {
+						departmentFolderShare = await Link_FolderTuHoSo_PhongBan.create({
+							Id: crypto.randomUUID(),
+							idFolderTuHoSo: req.body.Id,
+							idPhongBan: shareToItem.Id,
+							MaQuyen: shareToItem.MaQuyen,
+							CreatedBy: req.user.Id,
+							Created: new Date(),
+							ModifiedBy: req.user.Id,
+							Modified: new Date(),
+						});
+					}
+					break;
+				default:
+					return res.status(200).json({ Error: 6, Detail: "Loại không hợp lệ" });
+			}
 		}
+		const history = await Link_File_FolderShare_History.create({
+			Id: crypto.randomUUID(),
+			idFolderTuHoSo: req.body.Id,
+			CreatedBy: req.user.Id,
+			Created: new Date(),
+			ModifiedBy: req.user.Id,
+			Modified: new Date(),
+		});
+		const historyDetails = [];
+		for (const shareToItem of req.body.ShareTo) {
+			const historyDetail = await Link_File_FolderShare_HistoryDetail.create({
+				Id: crypto.randomUUID(),
+				idFolder_History: history.Id,
+				Loai: req.body.Type === "user" ? "User" : req.body.Type === "group" ? "NhomUser" : "PhongBan",
+				idNhan: req.body.Type === "user" ? 0 : shareToItem.Id,
+				MaQuyen: shareToItem.MaQuyen,
+				Ten: req.user.TenNhanVien,
+				UserIdNhan: req.body.Type === "user" ? shareToItem.Id : null,
+				CreatedBy: req.user.Id,
+				Created: new Date(),
+				ModifiedBy: req.user.Id,
+				Modified: new Date(),
+			});
+			historyDetails.push(historyDetail);
+		}
+		const historyData = history.toJSON();
+		historyData.Detail = historyDetails;
+		const value = {
+			historyData,
+			...(req.body.Type === "user" && { userfolderShare }),
+			...(req.body.Type === "group" && { groupFolderShare }),
+			...(req.body.Type === "department" && { departmentFolderShare }),
+		};
+		return res.status(200).json({ Detail: `Shared ${req.body.Type} successfully`, Error: 4, Value: value });
 	} catch (e) {
-		return res.status(500).json(e);
+		return res.status(200).json({ Error: 9, Detail: e.message, sError: "LoiServer" });
 	}
 };
 
-const getPersonalFolder = async (req, res) => {
+const getSharedHistory = async (req, res) => {
 	try {
-		const user = await AspNetUsers.findByPk(req.user.Id);
-		if (!user) return res.status(404).json({ message: "User not found" });
-		const [myFolder, myFile] = await Promise.all([
-			ThuMucHoSoDuAns.findAll({ where: { idNguoiSoHuu: req.user.Id, isXoa: 0 } }),
-			FileDinhKems.findAll({ where: { CreatedBy: req.user.Id, isXoa: 0 } }),
-		]);
-		// const sharedFileInFolderIds = await ThuMuc_File_Share.findAll({
-		// 	attributes: ["Folder"],
-		// 	where: { IdNguoiNhan: req.user.Id, isXoa: false, Folder: { [Op.ne]: null } },
-		// });
-		// const rootFolderIds = [...new Set(sharedFileInFolderIds.map((item) => item.Folder))];
-		// const mySharedFolder = await ThuMucHoSoDuAns.findAll({
-		// 	attributes: ["Id", "TenFolder"],
-		// 	where: { Id: { [Op.in]: rootFolderIds } },
-		// });
-		const [shareWithMeFolder, shareWithMeFile] = await Promise.all([
-			ThuMuc_File_Share.findAll({
-				where: { IdNguoiNhan: req.user.Id },
-				order: [["Modified", "DESC"]],
-			}),
-			ThuMuc_Share.findAll({
-				where: { idNguoiNhan: req.user.Id },
-				order: [["Modified", "DESC"]],
-			}),
-		]);
-		const [shareByMeFolder, shareByMeFile] = await Promise.all([
-			ThuMuc_File_Share.findAll({
-				where: { IdChuSoHuu: req.user.Id },
-				order: [["Modified", "DESC"]],
-			}),
-			ThuMuc_Share.findAll({
-				where: { IdChuSoHuu: req.user.Id },
-				order: [["Modified", "DESC"]],
-			}),
-		]);
-		const result = {
-			myItem: [...myFolder, ...myFile],
-			sharedWithMe: [...shareWithMeFolder, ...shareWithMeFile],
-			sharedByMe: [...shareByMeFolder, ...shareByMeFile],
-		};
-		return res.json(result);
+		const historys = await Link_File_FolderShare_History.findAll({ where: { idFolderTuHoSo: req.body.Id } });
+		const historyIds = historys.map((history) => history.Id);
+		const historyDetails = await Link_File_FolderShare_HistoryDetail.findAll({
+			where: {
+				idFolder_History: historyIds,
+			},
+		});
+		const result = historys.map((h) => {
+			const details = historyDetails.find((hd) => hd.idFolder_History === h.Id);
+			return {
+				...h.toJSON(),
+				Details: details,
+			};
+		});
+		return res.status(200).json({ Error: 4, Value: result });
 	} catch (e) {
-		return res.status(500).json({ message: e.message });
+		return res.status(200).json({ Error: 9, Detail: e.message, sError: "LoiServer" });
 	}
 };
-// Unfinished
+
+const moveLeftChild = async (parentFolder) => {
+	const childFolders = await ThuMucHoSoDuAnMaus.findAll({
+		where: {
+			idFolderParent: parentFolder.Id,
+		},
+		order: [["Position", "ASC"]],
+	});
+	for (const child of childFolders) {
+		await child.update({
+			CapDoFolder: child.CapDoFolder - 1,
+		});
+		await moveLeftChild(child);
+	}
+};
+
+const moveRightChild = async (parentFolder) => {
+	const childFolders = await ThuMucHoSoDuAnMaus.findAll({
+		where: {
+			idFolderParent: parentFolder.Id,
+		},
+		order: [["Position", "ASC"]],
+	});
+	for (const child of childFolders) {
+		await child.update({
+			CapDoFolder: child.CapDoFolder + 1,
+		});
+		await moveRightChild(child);
+	}
+};
+
 const moveFolder = async (req, res) => {
 	try {
 		// const checkAdmin = checkRole(req.user.Id, "QUANLYBIM", 3);
 		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allowed" });
-		const folder = await ThuMucHoSoDuAnMaus.findOne(req.body.Id);
+		const folder = await ThuMucHoSoDuAnMaus.findByPk(req.body.Id);
 		if (!folder) return res.status(404).json({ message: "Folder not found" });
 		switch (req.body.Action) {
 			case "left":
-				if (folder.CapDoFolder <= 1)
-					return res.status(200).json({ Error: 9, Detail: "Can not move left anymore", sError: "LoiCuPhap" });
-				folder.update({
-					CapDoFolder: folder.CapDoFolder - 1,
-					idFolderParent: await ThuMucHoSoDuAnMaus.findByPk(folder.idFolderParent, { attributes: ["Id"] }),
-				});
-				const childrenMoveLeft = await ThuMucHoSoDuAnMaus.findAll({
-					where: { idFolderParent: folder.Id },
-					attributes: ["Id"],
-				});
-				for (const child of childrenMoveLeft) {
-					await ThuMucHoSoDuAnMaus.update(
-						{ CapDoFolder: child.CapDoFolder - 1 },
-						{ where: { Id: child.Id } }
-					);
+				if (folder.CapDoFolder === 1) {
+					return res.status(200).json({ Detail: "Cannot move left anymore", Error: 6, sError: "LoiCuPhap" });
 				}
-				return res.status(200).json({ Detail: "Folder move left successfully", Error: 4 });
-			case "right":
-				if (folder.Position === 1)
-					return res
-						.status(200)
-						.json({ Detail: "Can not move right anymore", sError: "LoiCuPhap", Error: 9 });
-				folder.update({
-					CapDoFolder: folder.CapDoFolder + 1,
-					idFolderParent: await ThuMucHoSoDuAnMaus.findOne({
-						where: { idFolderParent: folder.idFolderParent, Position: folder.Position - 1 },
-					}),
+				const newCapDoFolderLeft = folder.CapDoFolder - 1;
+				const newParentId = await ThuMucHoSoDuAnMaus.findOne({ where: { Id: folder.idFolderParent } });
+				const countPositionMoveLeft = await ThuMucHoSoDuAnMaus.count({
+					where: {
+						CapDoFolder: newCapDoFolderLeft,
+						idThuVien: folder.idThuVien,
+					},
 				});
-				return res.status(200).json({ Detail: "Folder move right successfully", Error: 4 });
+				const moveBelowUp = await ThuMucHoSoDuAnMaus.findAll({
+					where: {
+						idFolderParent: folder.idFolderParent,
+						Position: { [Op.gt]: folder.Position },
+					},
+				});
+				for (const move of moveBelowUp) {
+					await move.update({ Position: move.Position - 1 });
+				}
+				await moveLeftChild(folder);
+				await folder.update({
+					CapDoFolder: newCapDoFolderLeft,
+					idFolderParent: newCapDoFolderLeft === 1 ? 0 : newParentId.Id,
+					Position: countPositionMoveLeft + 1,
+				});
+				return res.status(200).json({ Detail: "Folder move left successfully", Error: 4, Value: folder });
+			case "right":
+				if (folder.Position === 1) {
+					return res.status(200).json({ Detail: "Cannot move right anymore", Error: 6, sError: "LoiCuPhap" });
+				}
+				const newCapDoFolderRight = folder.CapDoFolder + 1;
+				const aboveFolder = await ThuMucHoSoDuAnMaus.findOne({
+					where: {
+						CapDoFolder: folder.CapDoFolder,
+						Position: folder.Position - 1,
+						idThuVien: folder.idThuVien,
+					},
+				});
+				const siblingFolders = await ThuMucHoSoDuAnMaus.findAll({
+					where: {
+						idThuVien: folder.idThuVien,
+						CapDoFolder: folder.CapDoFolder,
+						Position: { [Op.gt]: folder.Position },
+					},
+					order: [["Position", "ASC"]],
+				});
+				for (const sibling of siblingFolders) {
+					await sibling.update({
+						Position: sibling.Position - 1,
+					});
+				}
+				const countChild = await ThuMucHoSoDuAnMaus.count({
+					where: {
+						idThuVien: folder.idThuVien,
+						idFolderParent: aboveFolder.Id,
+						CapDoFolder: aboveFolder.CapDoFolder + 1,
+					},
+				});
+				await moveRightChild(folder);
+				await folder.update({
+					CapDoFolder: newCapDoFolderRight,
+					idFolderParent: aboveFolder.Id,
+					Position: countChild + 1,
+				});
+				return res.status(200).json({ Detail: "Folder move right successfully", Error: 4, Value: folder });
 			case "up":
-				if (folder.Position === 1)
+				if (folder.Position === 1) {
 					return res.status(200).json({ Detail: "Can not move up anymore", Error: 9, sError: "LoiCuPhap" });
-				folder.update({ Position: folder.Position - 1 });
-				await ThuMucHoSoDuAnMaus.update(
-					{ Position: folder.Position + 1 },
-					{ where: { idFolderParent: folder.idFolderParent, Position: folder.Position } }
-				);
-				return res.status(200).json({ Detail: "Folder moved up successfully", Error: 4 });
+				}
+				const folderPushDown = await ThuMucHoSoDuAnMaus.findOne({
+					where: {
+						idThuVien: folder.idThuVien,
+						Position: folder.Position - 1,
+						CapDoFolder: folder.CapDoFolder,
+					},
+				});
+				await folderPushDown.update({ Position: parseInt(folder.Position) });
+				await folder.update({ Position: parseInt(folder.Position) - 1 });
+				return res
+					.status(200)
+					.json({ Detail: "Folder moved up successfully", Error: 4, Value: [folder, folderPushDown] });
 			case "down":
 				const countChildFolder = await ThuMucHoSoDuAnMaus.count({
-					where: { idFolderParent: folder.idFolderParent },
+					where: {
+						idThuVien: folder.idThuVien,
+						CapDoFolder: folder.CapDoFolder,
+					},
 				});
-				if (folder.Position === countChildFolder)
-					return res.status(200).json({ Error: 9, Detail: "Can not move down anymore", sError: "LoiCuPhap" });
-				folder.update({ Position: folder.Position + 1 });
-				await ThuMucHoSoDuAnMaus.update(
-					{ Position: folder.Position - 1 },
-					{ where: { idFolderParent: folder.idFolderParent, Position: folder.Position } }
-				);
-				return res.status(200).json({ Detail: "Folder moved up successfully", Error: 4 });
+				if (countChildFolder === folder.Position) {
+					return res.status(200).json({ Detail: "Can not move down anymore", Error: 6, sError: "LoiCuPhap" });
+				}
+				const folderPushUp = await ThuMucHoSoDuAnMaus.findOne({
+					where: {
+						idThuVien: folder.idThuVien,
+						Position: folder.Position + 1,
+						CapDoFolder: folder.CapDoFolder,
+					},
+				});
+				await folderPushUp.update({ Position: parseInt(folder.Position) });
+				await folder.update({ Position: parseInt(folder.Position) + 1 });
+				return res
+					.status(200)
+					.json({ Detail: "Folder moved down successfully", Error: 4, Value: [folderPushUp, folder] });
 			default:
 				return res.status(200).json({ Error: 9, Detail: "Invalid action", sError: "LoiCuPhap" });
 		}
@@ -466,27 +587,295 @@ const moveFolder = async (req, res) => {
 	}
 };
 
-//Mobile API
-const getFile = async (req, res) => {
+const createChildFolderProject = async (folderData, idDuAn, userId, type) => {
+	const createdFolders = [];
+	let lastIdRecord = await ThuMucHoSoDuAns.findOne({
+		order: [["Id", "DESC"]],
+		attributes: ["Id"],
+		raw: true,
+	});
+	let lastId = lastIdRecord ? lastIdRecord.Id : 0;
+	const getParentFolderId = async (folder, idDuAn) => {
+		if (folder.idFolderParent === folder.Id) {
+			return 0;
+		} else {
+			const parentFolder = folderData.find((f) => f.Id === folder.idFolderParent);
+			const { TenFolder, idFolderParent } = parentFolder;
+			const parent = await ThuMucHoSoDuAns.findOne({
+				where: { TenFolder, idDuAn },
+				attributes: ["Id"],
+			});
+			return parent ? parent.Id : 0;
+		}
+	};
+	const createFolder = async (folder, parentFolderId = 0) => {
+		lastId++;
+		const newFolder = {
+			Id: lastId,
+			MaFolder: folder.MaFolder,
+			TenFolder: folder.TenFolder,
+			CapDoFolder: folder.CapDoFolder,
+			ThuTu: folder.Position,
+			Created: literal("CURRENT_TIMESTAMP"),
+			CreatedBy: userId,
+			Modified: literal("CURRENT_TIMESTAMP"),
+			ModifiedBy: userId,
+			idDuAn: idDuAn,
+			LoaiThuMuc: type,
+			idFolderRoot: "",
+			idNguoiSoHuu: folder.CreatedBy,
+			isXoa: 0,
+		};
+		const idFolderRoot = parentFolderId === 0 ? lastId : parentFolderId.split(";")[1];
+		if (newFolder.CapDoFolder === 1) {
+			newFolder.idFolderParent = 0;
+			newFolder.idFolderParentAll = ";;";
+		} else {
+			newFolder.idFolderParent = parentFolderId;
+			newFolder.idFolderParentAll = `;${parentFolderId};`;
+		}
+		const createdFolder = await ThuMucHoSoDuAns.create(newFolder);
+		createdFolders.push(createdFolder);
+		if (folder.children && folder.children.length > 0) {
+			for (const childFolder of folder.children) {
+				await createFolder(childFolder, createdFolder.id);
+			}
+		}
+	};
+	for (const folder of folderData) {
+		await createFolder(folder);
+	}
+};
+
+const applyToFolder = async (req, res) => {
 	try {
-		const tasksQuery = `
-		SELECT *
-		FROM "FileDinhKems" f
-		INNER JOIN ""
-		`;
+		const ListId = req.body.listIdDuAn;
+		const checkApply = await Link_ThuVien_DuAn.findAll({
+			where: { idThuVien: req.body.idThuVien },
+			attributes: ["idDuAn"],
+			raw: true,
+		});
+		const ListType = req.body.listLoaiFolder;
+		const library = await ThuVienThuMucMaus.findByPk(req.body.idThuVien);
+		if (!library) {
+			return res.status(200).json({ Detail: "Library not found", Error: 6, sError: "LoiCuPhap", Value: null });
+		}
+		const folder = await ThuMucHoSoDuAnMaus.findAll({
+			where: { idThuVien: req.body.idThuVien },
+			order: [["CapDoFolder", "ASC"]],
+		});
+		const folderData = buildFolderStructure(folder);
+		const existingIds = checkApply.map((row) => row.idDuAn);
+		const newIds = ListId.filter((id) => !existingIds.includes(id));
+		const idsToDelete = existingIds.filter((id) => !ListId.includes(id));
+		if (idsToDelete.length > 0) {
+			await ThuMucHoSoDuAns.destroy({
+				where: { idDuAn: idsToDelete },
+			});
+			await Link_ThuVien_DuAn.destroy({
+				where: { idThuVien: req.body.idThuVien, idDuAn: idsToDelete },
+			});
+		}
+		if (newIds.length > 0) {
+			for (let i = 0; i < newIds.length; i++) {
+				const id = newIds[i];
+				const type = ListType[i];
+				await Link_ThuVien_DuAn.create({
+					Id: crypto.randomUUID(),
+					idThuVien: req.body.idThuVien,
+					idDuAn: id,
+					LoaiThuMuc: type,
+					Created: Date.now(),
+					CreatedBy: req.user.Id,
+					Modified: Date.now(),
+					ModifiedBy: req.user.Id,
+				});
+				await createChildFolderProject(folderData, id, req.user.Id, type);
+			}
+		}
+		return res.status(200).json({ Detail: "Library applied successfully", Error: 4, Value: null });
 	} catch (e) {
-		return res.status(500).json(e);
+		return res.status(200).json({ Detail: e.message, Error: 9, sError: "LoiServer", Value: null });
+	}
+};
+
+const moveLeftChildProject = async (folder) => {
+	const childFolders = await ThuMucHoSoDuAns.findAll({
+		where: {
+			idFolderParent: folder.Id,
+			CapDoFolder: folder.CapDoFolder,
+		},
+	});
+	for (const child of childFolders) {
+		await child.update({
+			CapDoFolder: child.CapDoFolder - 1,
+		});
+		await moveLeftChildProject(child);
+	}
+};
+
+const moveRightChildProject = async (folder) => {
+	const childFolders = await ThuMucHoSoDuAns.findAll({
+		where: {
+			idFolderParent: folder.Id,
+			CapDoFolder: folder.CapDoFolder,
+		},
+	});
+	for (const child of childFolders) {
+		await child.update({
+			CapDoFolder: child.CapDoFolder + 1,
+		});
+		await moveRightChildProject(child);
+	}
+};
+
+const moveProjectFolder = async (req, res) => {
+	try {
+		// const checkAdmin = checkRole(req.user.Id, "QUANLYBIM", 3);
+		// if (!checkAdmin) return res.status(403).json({ message: "Only admin allowed" });
+		const folder = await ThuMucHoSoDuAns.findByPk(req.body.Id, { where: { isXoa: false } });
+		if (!folder) {
+			return res.status(404).json({ message: "Folder not found" });
+		} else {
+			switch (req.body.Action) {
+				case "left":
+					if (folder.CapDoFolder === 1) {
+						return res
+							.status(200)
+							.json({ Detail: "Cannot move left anymore", Error: 9, sError: "LoiCuPhap" });
+					}
+					const newCapDoFolderLeft = folder.CapDoFolder - 1;
+					const newParentIdMoveLeft = await ThuMucHoSoDuAns.findOne({
+						where: { Id: folder.idFolderParent },
+					});
+					const countPositionMoveLeft = await ThuMucHoSoDuAns.count({
+						where: {
+							idFolderParent: newParentIdMoveLeft.idFolderParent,
+						},
+					});
+					const moveBelowUp = await ThuMucHoSoDuAns.findAll({
+						where: {
+							idFolderParent: folder.idFolderParent,
+							Id: { [Op.ne]: folder.idFolderParent },
+							ThuTu: { [Op.lt]: folder.ThuTu },
+						},
+					});
+					for (const move of moveBelowUp) {
+						await move.update({ ThuTu: move.ThuTu - 1 });
+					}
+					// const newIdFolderParentAll = await getParentFolderIds(newParentIdMoveLeft.Id);
+					await moveLeftChildProject(folder);
+					await folder.update({
+						CapDoFolder: newCapDoFolderLeft,
+						idFolderParent: newParentIdMoveLeft.Id,
+						ThuTu: countPositionMoveLeft + 1,
+						// idFolderParentAll: newIdFolderParentAll,
+					});
+					return res.status(200).json({ Detail: "Folder move left successfully", Error: 4, Value: folder });
+				case "right":
+					if (folder.ThuTu === 1) {
+						return res
+							.status(200)
+							.json({ Detail: "Cannot move right anymore", Error: 6, sError: "LoiCuPhap" });
+					}
+					const newCapDoFolderRight = folder.CapDoFolder + 1;
+					const aboveFolder = await ThuMucHoSoDuAns.findOne({
+						where: {
+							CapDoFolder: folder.CapDoFolder,
+							ThuTu: folder.idThuVien - 1,
+							idThuVien: folder.idThuVien,
+						},
+					});
+					const siblingFolders = await ThuMucHoSoDuAnMaus.findAll({
+						where: {
+							idDuAn: folder.idDuAn,
+							idFolderParent: folder.idFolderParent,
+							ThuTu: { [Op.gt]: folder.ThuTu },
+						},
+						order: [["ThuTu", "ASC"]],
+					});
+					for (const sibling of siblingFolders) {
+						await sibling.update({
+							ThuTu: sibling.ThuTu - 1,
+						});
+					}
+					const countChild = await ThuMucHoSoDuAns.count({
+						where: {
+							idDuAn: folder.idDuAn,
+							idFolderParent: aboveFolder.Id,
+							CapDoFolder: aboveFolder.CapDoFolder + 1,
+						},
+					});
+					await moveRightChildProject(folder);
+					await folder.update({
+						CapDoFolder: newCapDoFolderRight,
+						idFolderParent: aboveFolder.Id,
+						ThuTu: countChild + 1,
+					});
+					return res.status(200).json({ Detail: "Folder move right successfully", Error: 4, Value: folder });
+				case "up":
+					if (folder.ThuTu === 1) {
+						return res
+							.status(200)
+							.json({ Detail: "Cannot move left anymore", Error: 6, sError: "LoiCuPhap" });
+					}
+					const folderPushDown = await ThuMucHoSoDuAns.findOne({
+						where: {
+							idDuAn: folder.idDuAn,
+							ThuTu: folder.ThuTu - 1,
+							CapDoFolder: folder.CapDoFolder,
+						},
+					});
+					await folderPushDown.update({ ThuTu: folder.ThuTu });
+					await folder.update({ ThuTu: folder.ThuTu - 1 });
+					return res
+						.status(200)
+						.json({ Detail: "Folder moved up successfully", Error: 4, Value: [folder, folderPushDown] });
+				case "down":
+					const countChildFolder = await ThuMucHoSoDuAns.count({
+						where: {
+							idDuAn: folder.idDuAn,
+							CapDoFolder: folder.CapDoFolder,
+						},
+					});
+					if (countChildFolder === folder.ThuTu) {
+						return res
+							.status(200)
+							.json({ Detail: "Cannot move down anymore", Error: 6, sError: "LoiCuPhap" });
+					}
+					const folderPushUp = await ThuMucHoSoDuAns.findOne({
+						where: {
+							idDuAn: folder.idDuAn,
+							ThuTu: folder.ThuTu + 1,
+							CapDoFolder: folder.CapDoFolder,
+						},
+					});
+					await folderPushUp.update({ ThuTu: folder.ThuTu });
+					await folder.update({ ThuTu: folder.ThuTu + 1 });
+					return res
+						.status(200)
+						.json({ Detail: "Folder moved down successfully", Error: 4, Value: [folderPushUp, folder] });
+				case "any":
+					break;
+				default:
+					return res.status(200).json({ Error: 9, Detail: "Invalid action", sError: "LoiCuPhap" });
+			}
+		}
+	} catch (e) {
+		return res.status(200).json({ Detail: e.message, Error: 9, sError: "LoiServer", Value: null });
 	}
 };
 
 module.exports = {
 	getLibrary,
 	createLibrary,
-	getPersonalFolder,
 	deleteLibrary,
 	shareDirectory,
 	getFilterLibrary,
 	createAndUpdateFolder,
 	deleteFolder,
 	moveFolder,
+	getSharedHistory,
+	applyToFolder,
+	moveProjectFolder,
 };

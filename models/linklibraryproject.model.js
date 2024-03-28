@@ -1,20 +1,18 @@
 "use strict";
 const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
-	class ThuMuc_Share extends Model {}
-	ThuMuc_Share.init(
+	class Link_ThuVien_DuAn extends Model {}
+	Link_ThuVien_DuAn.init(
 		{
 			Id: {
+				type: DataTypes.STRING,
 				allowNull: false,
 				primaryKey: true,
 				unique: true,
-				type: DataTypes.UUID,
 			},
-			IdItem: DataTypes.UUID,
-			TenFolder: DataTypes.STRING,
-			IdNguoiNhan: DataTypes.STRING,
-			Quyen: DataTypes.STRING,
-			IdChuSoHuu: DataTypes.STRING,
+			idThuVien: DataTypes.STRING,
+			idDuAn: DataTypes.INTEGER,
+			LoaiThuMuc: DataTypes.STRING,
 			Created: DataTypes.DATE,
 			CreatedBy: DataTypes.STRING,
 			Modified: DataTypes.DATE,
@@ -22,10 +20,10 @@ module.exports = (sequelize, DataTypes) => {
 		},
 		{
 			sequelize,
-			modelName: "ThuMuc_Share",
 			timestamps: false,
 			freezeTableName: true,
+			modelName: "Link_ThuVien_DuAn",
 		}
 	);
-	return ThuMuc_Share;
+	return Link_ThuVien_DuAn;
 };
